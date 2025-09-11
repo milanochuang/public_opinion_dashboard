@@ -50,8 +50,8 @@ if st.button("🔄 資料更新"):
 st.subheader("📊 政黨評論總量變化")
 col1, col2, col3, col4 = st.columns(4)
 
-# 當前小時 & 前一小時
-now_hour = df["date"].dt.floor("H").max()
+# 當前小時 & 前一小時（基準往前推 1 小時）
+now_hour = df["date"].dt.floor("H").max() - timedelta(hours=1)
 prev_hour = now_hour - timedelta(hours=1)
 current_df = df[df["date"].dt.floor("H") == now_hour]
 prev_df = df[df["date"].dt.floor("H") == prev_hour]
