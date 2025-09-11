@@ -134,7 +134,7 @@ rank = (
     .sort_values("count", ascending=False)
     .head(10)
 )
-st.dataframe(rank, use_container_width=True)
+st.dataframe(rank, use_container_width=True, hide_index=True)
 
 # ===== 5. 趨勢折線圖（每小時） =====
 df["date"] = df["date"].dt.tz_convert("Asia/Taipei")
