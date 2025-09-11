@@ -97,6 +97,7 @@ for party in parties:
         barmode="group",
         color_discrete_map={"positive": "lightgreen", "negative": "lightcoral"}
     )
+    fig.update_yaxes(range=[0, df["subcategory"].value_counts().max() * 1.1])
     st.plotly_chart(fig, use_container_width=True, key=f"{party}-bar-chart")
 
 # ===== 新增日期與政黨篩選 =====
