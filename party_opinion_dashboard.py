@@ -83,7 +83,7 @@ col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
 col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
 
 # ===== 3. 子類別分布圖（正負） =====
-st.subheader("🧱 評價子類別分布")
+st.subheader("📊 評價子類別分布")
 
 party_logos = {
     "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
@@ -148,9 +148,8 @@ rank = (
 )
 st.dataframe(rank, use_container_width=True, hide_index=True)
 
-st.markdown("<br><br>", unsafe_allow_html=True)
-
 # ===== 5. 趨勢折線圖（每小時） =====
+st.subheader("📈 趨勢折線圖")
 filtered["hour"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("H")
 line_df = filtered.groupby(["hour", "target", "subcategory", "polarity"]).size().reset_index(name="count")
 line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
