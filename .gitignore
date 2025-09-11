@@ -21,3 +21,5 @@ env/
 
 # Jupyter checkpoints (如果有用)
 .ipynb_checkpoints/
+
+.DS_Store
