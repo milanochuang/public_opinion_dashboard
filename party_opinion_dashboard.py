@@ -35,19 +35,40 @@ def load_data():
 df = load_data()
 # ===== 2. KPI 數據卡 =====
 st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
-if st.button("🔄 立即重新載入最新資料"):
-    st.cache_data.clear()
-    st.rerun()
 st.subheader("📊 政黨評論總量變化")
 col1, col2, col3, col4 = st.columns(4)
+
+# 當前小時 & 前一小時
+now_hour = df["date"].dt.floor("H").max()
+prev_hour = now_hour - timedelta(hours=1)
+current_df = df[df["date"].dt.floor("H") == now_hour]
+prev_df = df[df["date"].dt.floor("H") == prev_hour]
+
+# 總評論數
 total = len(df)
-dpp = len(df[df["target"] == "民進黨"])
-kmt = len(df[df["target"] == "國民黨"])
-tpp = len(df[df["target"] == "民眾黨"])
-col1.metric("總評論數", total, "+3.2%")
-col2.metric("民進黨評論數", dpp, "-1.5%")
-col3.metric("國民黨評論數", kmt, "+6.7%")
-col4.metric("民眾黨評論數", tpp, "+6.7%")
+total_now = len(current_df)
+total_prev = len(prev_df)
+total_delta = total_now - total_prev
+
+# 民進黨
+dpp_now = (current_df["target"] == "民進黨").sum()
+dpp_prev = (prev_df["target"] == "民進黨").sum()
+dpp_delta = dpp_now - dpp_prev
+
+# 國民黨
+kmt_now = (current_df["target"] == "國民黨").sum()
+kmt_prev = (prev_df["target"] == "國民黨").sum()
+kmt_delta = kmt_now - kmt_prev
+
+# 民眾黨
+tpp_now = (current_df["target"] == "民眾黨").sum()
+tpp_prev = (prev_df["target"] == "民眾黨").sum()
+tpp_delta = tpp_now - tpp_prev
+
+col1.metric("本小時評論數", total, delta=f"{total_delta:+}")
+col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_delta:+}")
+col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
+col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
 
 # ===== 3. 子類別分布圖（正負） =====
 st.subheader("🧱 評價子類別分布（含正負極性）")
