@@ -112,18 +112,30 @@ for party in parties:
     st.plotly_chart(fig, use_container_width=True, key=f"{party}-bar-chart")
 
 # ===== 新增日期與政黨篩選 =====
-st.subheader("🎯 特定日期與政黨排名")
+st.subheader("🎯 選取日期與目標政黨")
 min_date = df["date"].min().date()
 max_date = df["date"].max().date()
 default_start = max(min_date, max_date - timedelta(days=7))
-start_date, end_date = st.date_input("選擇日期區段", (default_start, max_date), min_value=min_date, max_value=max_date)
 
-selected_parties = st.multiselect("選擇政黨", options=df["target"].unique().tolist(), default=df["target"].unique().tolist())
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    start_date, end_date = st.date_input("選擇日期區段", (default_start, max_date), min_value=min_date, max_value=max_date)
+with col2:
+    selected_parties = st.multiselect("選擇政黨", options=df["target"].unique().tolist(), default=df["target"].unique().tolist())
+with col3:
+    all_subcats = sorted(df["subcategory"].dropna().unique().tolist())
+    selected_subcats = st.multiselect("選擇子類別", options=["全部"] + all_subcats, default="全部")
+with col4:
+    selected_polarity = st.multiselect("選擇正負極性", options=["全部", "positive", "negative"], default="全部")
 
 # 篩選資料
 filtered = df[(df["date"].dt.date >= start_date) & (df["date"].dt.date <= end_date)]
 if selected_parties:
     filtered = filtered[filtered["target"].isin(selected_parties)]
+if selected_subcats != ["全部"]:
+    filtered = filtered[filtered["subcategory"].isin(selected_subcats)]
+if selected_polarity != ["全部"]:
+    filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
 # ===== 4. 評價面向排名圖 =====
 st.subheader("🏅 評價子類別 + polarity 排名")
@@ -136,23 +148,19 @@ rank = (
 )
 st.dataframe(rank, use_container_width=True, hide_index=True)
 
+st.markdown("<br><br>", unsafe_allow_html=True)
+
 # ===== 5. 趨勢折線圖（每小時） =====
-df["date"] = df["date"].dt.tz_convert("Asia/Taipei")
-df["hour"] = (df["date"] - pd.Timedelta(hours=8)).dt.floor("H")
-line_df = df.groupby(["hour", "target"]).size().reset_index(name="count")
+filtered["hour"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("H")
+line_df = filtered.groupby(["hour", "target", "subcategory", "polarity"]).size().reset_index(name="count")
+line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
 line = alt.Chart(line_df).mark_line(point=True).encode(
     x=alt.X("hour:T", title="時間", axis=alt.Axis(format="%m/%d %H:%M", tickMinStep=3600000, labelAngle=0)),
     y=alt.Y("count:Q", title="評論數"),
-    color=alt.Color(
-        "target:N",
-        title="政黨",
-        scale=alt.Scale(
-            domain=["民進黨", "國民黨", "民眾黨"],
-            range=["rgb(67,151,42)", "rgb(6,6,124)", "rgb(97,196,200)"]
-        )
-    ),
-    tooltip=["hour:T", "target:N", "count:Q"]
+    color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
+    tooltip=["hour:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
 ).properties(width=800, height=400)
+
 st.altair_chart(line, use_container_width=True)
 
 # ===== 6. 評價詞文字雲 =====
