@@ -43,7 +43,7 @@ df = load_data()
 st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
 
 # with col_button:
-if st.button("🔄"):
+if st.button("🔄 資料更新"):
     st.cache_data.clear()
     st.rerun()
 
@@ -83,10 +83,21 @@ col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
 col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
 
 # ===== 3. 子類別分布圖（正負） =====
-st.subheader("🧱 評價子類別分布（含正負極性）")
+st.subheader("🧱 評價子類別分布")
+
+party_logos = {
+    "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
+    "國民黨": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Emblem_of_the_Kuomintang.svg",
+    "民眾黨": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Emblem_of_Taiwan_People%27s_Party_2019.svg"
+}
+
 parties = df["target"].unique()
 for party in parties:
-    st.markdown(f"##### {party}")
+    logo_url = party_logos.get(party, "")
+    st.markdown(
+        f"<h4><img src='{logo_url}' width='30' style='vertical-align: middle;'> {party}</h4>",
+        unsafe_allow_html=True
+    )
     d = df[df["target"] == party]
     bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
     fig = px.bar(
