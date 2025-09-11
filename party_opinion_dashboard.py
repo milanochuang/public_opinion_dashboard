@@ -35,6 +35,9 @@ def load_data():
 df = load_data()
 # ===== 2. KPI 數據卡 =====
 st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
+if st.button("🔄 立即重新載入最新資料"):
+    st.cache_data.clear()
+    st.rerun()
 st.subheader("📊 政黨評論總量變化")
 col1, col2, col3, col4 = st.columns(4)
 total = len(df)
