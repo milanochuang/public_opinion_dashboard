@@ -89,7 +89,14 @@ for party in parties:
     st.markdown(f"##### {party}")
     d = df[df["target"] == party]
     bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
-    fig = px.bar(bar, x="subcategory", y="count", color="polarity", barmode="group")
+    fig = px.bar(
+        bar,
+        x="subcategory",
+        y="count",
+        color="polarity",
+        barmode="group",
+        color_discrete_map={"positive": "green", "negative": "red"}
+    )
     st.plotly_chart(fig, use_container_width=True, key=f"{party}-bar-chart")
 
 # ===== 新增日期與政黨篩選 =====
