@@ -77,7 +77,7 @@ tpp_now = (current_df["target"] == "民眾黨").sum()
 tpp_prev = (prev_df["target"] == "民眾黨").sum()
 tpp_delta = tpp_now - tpp_prev
 
-col1.metric("本小時評論數", total)
+col1.metric("總評論數", total)
 col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_delta:+}")
 col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
 col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
