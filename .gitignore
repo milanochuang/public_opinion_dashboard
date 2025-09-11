@@ -1,0 +1,23 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+sheet_key.json
+
+# 環境設定
+.env
+.venv/
+venv/
+env/
+
+# log 檔
+*.log
+
+# Jupyter checkpoints (如果有用)
+.ipynb_checkpoints/

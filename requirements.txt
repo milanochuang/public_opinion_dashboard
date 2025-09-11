@@ -1,0 +1,10 @@
+streamlit
+pandas
+plotly
+altair
+wordcloud
+matplotlib
+jieba
+gspread
+oauth2client
+requests
