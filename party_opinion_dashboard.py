@@ -8,12 +8,19 @@ import jieba
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta, timezone
+import os
+
+
 
 # ===== 1. 資料讀取 =====
 @st.cache_data(ttl=3600)
 def load_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("sheet_key.json", scope)
+    if "gcp" in st.secrets:
+        creds_dict = st.secrets["gcp"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
+    else:
+        creds = ServiceAccountCredentials.from_json_keyfile_name("sheet_key.json", scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1IFPlptD-G9W0_s6PKULvgioY5pSiCW4-79l-pMFjTRw/edit#gid=0")
     worksheet = sheet.sheet1
