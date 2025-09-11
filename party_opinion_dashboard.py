@@ -95,7 +95,7 @@ for party in parties:
         y="count",
         color="polarity",
         barmode="group",
-        color_discrete_map={"positive": "green", "negative": "red"}
+        color_discrete_map={"positive": "lightgreen", "negative": "lightcoral"}
     )
     st.plotly_chart(fig, use_container_width=True, key=f"{party}-bar-chart")
 
