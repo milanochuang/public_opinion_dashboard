@@ -33,8 +33,20 @@ def load_data():
     return df
 
 df = load_data()
+
 # ===== 2. KPI 數據卡 =====
+# st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
+
+# col_title, col_button = st.columns([5, 1])
+
+# with col_title:
 st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
+
+# with col_button:
+if st.button("🔄"):
+    st.cache_data.clear()
+    st.rerun()
+
 st.subheader("📊 政黨評論總量變化")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -65,7 +77,7 @@ tpp_now = (current_df["target"] == "民眾黨").sum()
 tpp_prev = (prev_df["target"] == "民眾黨").sum()
 tpp_delta = tpp_now - tpp_prev
 
-col1.metric("本小時評論數", total, delta=f"{total_delta:+}")
+col1.metric("本小時評論數", total)
 col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_delta:+}")
 col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
 col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
@@ -106,13 +118,20 @@ rank = (
 st.dataframe(rank, use_container_width=True)
 
 # ===== 5. 趨勢折線圖（每小時） =====
-st.subheader("📈 每小時評論趨勢")
-df["hour"] = df["date"].dt.floor("H")
+df["date"] = df["date"].dt.tz_convert("Asia/Taipei")
+df["hour"] = (df["date"] - pd.Timedelta(hours=8)).dt.floor("H")
 line_df = df.groupby(["hour", "target"]).size().reset_index(name="count")
 line = alt.Chart(line_df).mark_line(point=True).encode(
-    x=alt.X("hour:T", title="時間（每小時）", axis=alt.Axis(format="%m/%d %H:%M", tickMinStep=3600000, labelAngle=0)),
+    x=alt.X("hour:T", title="時間", axis=alt.Axis(format="%m/%d %H:%M", tickMinStep=3600000, labelAngle=0)),
     y=alt.Y("count:Q", title="評論數"),
-    color="target:N",
+    color=alt.Color(
+        "target:N",
+        title="政黨",
+        scale=alt.Scale(
+            domain=["民進黨", "國民黨", "民眾黨"],
+            range=["rgb(67,151,42)", "rgb(6,6,124)", "rgb(97,196,200)"]
+        )
+    ),
     tooltip=["hour:T", "target:N", "count:Q"]
 ).properties(width=800, height=400)
 st.altair_chart(line, use_container_width=True)
