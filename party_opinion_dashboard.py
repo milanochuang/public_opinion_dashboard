@@ -36,7 +36,7 @@ st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀�
 
 tab0, tab1 = st.tabs(["📊 儀表板", "📚 簡介"])
 
-with tab1:
+with tab0:
     if st.button("🔄 資料更新"):
         st.cache_data.clear()
         st.rerun()
@@ -176,7 +176,7 @@ with tab1:
     st.subheader("📋 原始評論資料")
     st.dataframe(df[["date", "target", "subcategory", "polarity", "text_span", "comment"]], use_container_width=True)
 
-with tab0:
+with tab1:
     st.markdown("### Appraisal framework")
     st.markdown("""
     Appraisal framework 是系統功能語言學中用來分析語言中表達評價、情感、態度等立場的理論架構。  
