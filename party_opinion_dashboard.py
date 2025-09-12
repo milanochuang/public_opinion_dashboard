@@ -34,21 +34,7 @@ df = load_data()
 # ===== 2. KPI 數據卡 =====
 st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
 
-tab0, tab1 = st.tabs(["📚 簡介", "📊 儀表板"])
-
-with tab0:
-    st.markdown("### Appraisal framework")
-    st.markdown("""
-    Appraisal framework 是系統功能語言學中用來分析語言中表達評價、情感、態度等立場的理論架構。  
-    其中 *Judgement* 是三大主類別（Attitude → Affect, Judgement, Appreciation）之一，專注於對人的行為進行評價。
-
-    **Judgement 主要子類別：**
-    - **Capacity 能力**：是否有能力達成任務（如「有能力」、「無能」、「很專業」）
-    - **Tenacity 毅力**：是否堅持不懈、有恆心（如「努力」、「懶惰」）
-    - **Veracity 誠實**：是否說實話、不欺瞞（如「誠實」、「說謊」）
-    - **Propriety 品德**：是否合乎道德與社會規範（如「正直」、「貪污」）
-    - **Normality 常態性**：是否符合期待、是否奇怪（如「正常」、「怪異」）
-    """)
+tab0, tab1 = st.tabs(["📊 儀表板", "📚 簡介"])
 
 with tab1:
     if st.button("🔄 資料更新"):
@@ -189,3 +175,17 @@ with tab1:
     # ===== 7. 原始資料表格 =====
     st.subheader("📋 原始評論資料")
     st.dataframe(df[["date", "target", "subcategory", "polarity", "text_span", "comment"]], use_container_width=True)
+
+with tab0:
+    st.markdown("### Appraisal framework")
+    st.markdown("""
+    Appraisal framework 是系統功能語言學中用來分析語言中表達評價、情感、態度等立場的理論架構。  
+    其中 *Judgement* 是三大主類別（Attitude → Affect, Judgement, Appreciation）之一，專注於對人的行為進行評價。
+
+    **Judgement 主要子類別：**
+    - **Capacity 能力**：是否有能力達成任務（如「有能力」、「無能」、「很專業」）
+    - **Tenacity 毅力**：是否堅持不懈、有恆心（如「努力」、「懶惰」）
+    - **Veracity 誠實**：是否說實話、不欺瞞（如「誠實」、「說謊」）
+    - **Propriety 品德**：是否合乎道德與社會規範（如「正直」、「貪污」）
+    - **Normality 常態性**：是否符合期待、是否奇怪（如「正常」、「怪異」）
+    """)
