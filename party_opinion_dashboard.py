@@ -18,7 +18,7 @@ def load_data():
     else:
         creds = ServiceAccountCredentials.from_json_keyfile_name("sheet_key.json", scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1IFPlptD-G9W0_s6PKULvgioY5pSiCW4-79l-pMFjTRw/edit#gid=0")
+    sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1LoiXIOYv6A5Ws3cn_95wNRmXIWltQgSbXOTQ5lLWDzA/edit?gid=1977939127#gid=1977939127")
     worksheet = sheet.sheet1
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
