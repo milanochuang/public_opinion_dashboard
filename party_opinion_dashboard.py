@@ -39,6 +39,45 @@ with tab0:
         st.cache_data.clear()
         st.rerun()
 
+    st.subheader("📊 全期間政黨評論總覽")
+    col1, col2, col3, col4 = st.columns(4)
+
+    total_all = len(df)
+    dpp_all = (df["target"] == "民主進步黨").sum()
+    kmt_all = (df["target"] == "中國國民黨").sum()
+    tpp_all = (df["target"] == "台灣民眾黨").sum()
+
+    col1.metric("總評論數", total_all)
+    col2.metric("民進黨評論數", dpp_all)
+    col3.metric("國民黨評論數", kmt_all)
+    col4.metric("民眾黨評論數", tpp_all)
+
+    st.subheader("📊 評價子類別分布")
+    party_logos = {
+        "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
+        "國民黨": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Emblem_of_the_Kuomintang.svg",
+        "民眾黨": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Emblem_of_Taiwan_People%27s_Party_2019.svg"
+    }
+    parties = df["target"].unique()
+    for party in parties:
+        logo_url = party_logos.get(party, "")
+        st.markdown(
+            f"<h4><img src='{logo_url}' width='30' style='vertical-align: middle;'> {party}</h4>",
+            unsafe_allow_html=True
+        )
+        d = df[df["target"] == party]
+        bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
+        fig = px.bar(
+            bar,
+            x="subcategory",
+            y="count",
+            color="polarity",
+            barmode="group",
+            color_discrete_map={"positive": "lightgreen", "negative": "lightcoral"}
+        )
+        fig.update_yaxes(range=[0, df["subcategory"].value_counts().max() * 1.1])
+        st.plotly_chart(fig, use_container_width=True, key=f"{party}-bar-chart")
+
     # 選擇月份
     # selected_month = st.date_input("📅 選擇月份", datetime.today().date().replace(day=1))
     # 修改為根據 df["date"] 的最小和最大日期決定月份範圍
