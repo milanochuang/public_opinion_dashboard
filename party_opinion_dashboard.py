@@ -98,7 +98,7 @@ with tab0:
             f"<h4><img src='{logo_url}' width='30' style='vertical-align: middle;'> {party}</h4>",
             unsafe_allow_html=True
         )
-        d = df[df["target"] == party]
+        d = current_df[current_df["target"] == party]
         bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
         fig = px.bar(
             bar,
