@@ -203,7 +203,7 @@ with tab0:
             axis=alt.Axis(format="%m/%d", labelAngle=0),
             scale=alt.Scale(domain=[start_date, end_date])
         ),
-        y=alt.Y("count:Q", title="評論數"),
+        y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
         color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
         tooltip=["day:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
     ).properties(width=800, height=400)
