@@ -180,16 +180,16 @@ with tab0:
     if selected_polarity != ["全部"]:
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
-    # ===== 4. 評價面向排名圖 =====
-    st.subheader("🏅 評價子類別 + polarity 排名")
-    rank = (
-        filtered.groupby(["target", "subcategory", "polarity"])
-        .size()
-        .reset_index(name="count")
-        .sort_values("count", ascending=False)
-        .head(10)
-    )
-    st.dataframe(rank, use_container_width=True, hide_index=True)
+    # # ===== 4. 評價面向排名圖 =====
+    # st.subheader("🏅 評價子類別 + polarity 排名")
+    # rank = (
+    #     filtered.groupby(["target", "subcategory", "polarity"])
+    #     .size()
+    #     .reset_index(name="count")
+    #     .sort_values("count", ascending=False)
+    #     .head(10)
+    # )
+    # st.dataframe(rank, use_container_width=True, hide_index=True)
 
     # ===== 5. 趨勢折線圖（每小時） =====
     st.subheader("📈 趨勢折線圖")
