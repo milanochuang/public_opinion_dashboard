@@ -214,7 +214,26 @@ def trend_line_and_filters():
     wc_party = st.selectbox("選擇政黨（文字雲）", df["target"].unique(), key="wordcloud_party")
     wc_subcat = st.selectbox("選擇子類別", ["全部"] + sorted(df["subcategory"].unique().tolist()), key="wordcloud_subcat")
     wc_polarity = st.selectbox("選擇正負極性", ["全部", "positive", "negative"], key="wordcloud_polarity")
-    wc_df = df[(df["target"] == wc_party) & (df["date"] >= start_date) & (df["date"] <= end_date)]
+
+    # 新增：文字雲專用日期範圍選取（以當前篩選的起訖作為預設值）
+    # 備註：date_input 回傳日期（無時區），此處將其轉為 UTC 的起訖時間區間 [wc_start_utc, wc_end_utc)
+    default_wc_start = (start_date.tz_convert("UTC") if hasattr(start_date, "tzinfo") and start_date.tzinfo else start_date).date()
+    default_wc_end = (end_date.tz_convert("UTC") if hasattr(end_date, "tzinfo") and end_date.tzinfo else end_date).date()
+    wc_date_range = st.date_input(
+        "選擇日期範圍（文字雲）",
+        value=(default_wc_start, default_wc_end),
+        key="wordcloud_date_range"
+    )
+    if isinstance(wc_date_range, (list, tuple)) and len(wc_date_range) == 2:
+        wc_start_utc = pd.to_datetime(wc_date_range[0]).tz_localize("UTC")
+        wc_end_utc = (pd.to_datetime(wc_date_range[1]) + pd.Timedelta(days=1)).tz_localize("UTC")
+    else:
+        # 若使用者只選單日，視為該日整天
+        wc_start_utc = pd.to_datetime(wc_date_range).tz_localize("UTC")
+        wc_end_utc = (pd.to_datetime(wc_date_range) + pd.Timedelta(days=1)).tz_localize("UTC")
+
+    # 依文字雲日期範圍過濾
+    wc_df = df[(df["target"] == wc_party) & (df["date"] >= wc_start_utc) & (df["date"] < wc_end_utc)]
     if wc_subcat != "全部":
         wc_df = wc_df[wc_df["subcategory"] == wc_subcat]
     if wc_polarity != "全部":
