@@ -168,7 +168,10 @@ def month_kpis_and_subcats(selected_label: str):
         fig.update_yaxes(range=[0, 50])
         st.plotly_chart(fig, use_container_width=True, key=f"month-{party}-bar-chart")
 
-def trend_line_and_filters():
+def trend_line_and_filters(mode: str = "both"):
+    """Render filters + (line chart and/or wordcloud) depending on mode.
+    mode ∈ {"both", "line", "wordcloud"}
+    """
     st.subheader("🎯 選取日期與目標政黨")
     min_month = df["date"].dropna().min().to_period("M").to_timestamp()
     max_month = df["date"].dropna().max().to_period("M").to_timestamp()
@@ -197,35 +200,56 @@ def trend_line_and_filters():
     if selected_polarity != ["全部"]:
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
-    st.subheader("📈 趨勢折線圖")
-    filtered["day"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("D")
-    line_df = filtered.groupby(["day", "target", "subcategory", "polarity"]).size().reset_index(name="count")
-    line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
-    line = alt.Chart(line_df).mark_line(point=True).encode(
-        x=alt.X("day:T", title="日期", axis=alt.Axis(format="%m/%d", labelAngle=0), scale=alt.Scale(domain=[start_date, end_date])),
-        y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
-        color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
-        tooltip=["day:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
-    ).properties(width=800, height=400)
-    st.altair_chart(line, use_container_width=True)
+    if mode in {"both", "line"}:
+        st.subheader("📈 趨勢折線圖")
+        filtered["day"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("D")
+        line_df = filtered.groupby(["day", "target", "subcategory", "polarity"]).size().reset_index(name="count")
+        line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
+        line = alt.Chart(line_df).mark_line(point=True).encode(
+            x=alt.X("day:T", title="日期", axis=alt.Axis(format="%m/%d", labelAngle=0), scale=alt.Scale(domain=[start_date, end_date])),
+            y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
+            color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
+            tooltip=["day:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
+        ).properties(width=800, height=400)
+        st.altair_chart(line, use_container_width=True)
 
-    # 文字雲
-    st.subheader("☁️ 評價詞文字雲")
-    wc_party = st.selectbox("選擇政黨（文字雲）", df["target"].unique(), key="wordcloud_party")
-    wc_subcat = st.selectbox("選擇子類別", ["全部"] + sorted(df["subcategory"].unique().tolist()), key="wordcloud_subcat")
-    wc_polarity = st.selectbox("選擇正負極性", ["全部", "positive", "negative"], key="wordcloud_polarity")
-    wc_df = df[(df["target"] == wc_party) & (df["date"] >= start_date) & (df["date"] <= end_date)]
-    if wc_subcat != "全部":
-        wc_df = wc_df[wc_df["subcategory"] == wc_subcat]
-    if wc_polarity != "全部":
-        wc_df = wc_df[wc_df["polarity"] == wc_polarity]
-    if not wc_df.empty:
-        text = " ".join(wc_df["text_span"].astype(str).tolist())
-        wc = WordCloud(font_path="Font.ttc", background_color="white", width=800, height=400).generate(text)
-        plt.imshow(wc, interpolation="bilinear"); plt.axis("off")
-        st.pyplot(plt)
-    else:
-        st.info("無資料可生成文字雲")
+    if mode in {"both", "wordcloud"}:
+        # 文字雲
+        st.subheader("☁️ 評價詞文字雲")
+        wc_party = st.selectbox("選擇政黨（文字雲）", df["target"].unique(), key="wordcloud_party")
+        wc_subcat = st.selectbox("選擇子類別", ["全部"] + sorted(df["subcategory"].unique().tolist()), key="wordcloud_subcat")
+        wc_polarity = st.selectbox("選擇正負極性", ["全部", "positive", "negative"], key="wordcloud_polarity")
+
+        # 新增：文字雲專用日期範圍選取（以當前篩選的起訖作為預設值）
+        # 備註：date_input 回傳日期（無時區），此處將其轉為 UTC 的起訖時間區間 [wc_start_utc, wc_end_utc)
+        default_wc_start = (start_date.tz_convert("UTC") if hasattr(start_date, "tzinfo") and start_date.tzinfo else start_date).date()
+        default_wc_end = (end_date.tz_convert("UTC") if hasattr(end_date, "tzinfo") and end_date.tzinfo else end_date).date()
+        wc_date_range = st.date_input(
+            "選擇日期範圍（文字雲）",
+            value=(default_wc_start, default_wc_end),
+            key="wordcloud_date_range"
+        )
+        if isinstance(wc_date_range, (list, tuple)) and len(wc_date_range) == 2:
+            wc_start_utc = pd.to_datetime(wc_date_range[0]).tz_localize("UTC")
+            wc_end_utc = (pd.to_datetime(wc_date_range[1]) + pd.Timedelta(days=1)).tz_localize("UTC")
+        else:
+            # 若使用者只選單日，視為該日整天
+            wc_start_utc = pd.to_datetime(wc_date_range).tz_localize("UTC")
+            wc_end_utc = (pd.to_datetime(wc_date_range) + pd.Timedelta(days=1)).tz_localize("UTC")
+
+        # 依文字雲日期範圍過濾
+        wc_df = df[(df["target"] == wc_party) & (df["date"] >= wc_start_utc) & (df["date"] < wc_end_utc)]
+        if wc_subcat != "全部":
+            wc_df = wc_df[wc_df["subcategory"] == wc_subcat]
+        if wc_polarity != "全部":
+            wc_df = wc_df[wc_df["polarity"] == wc_polarity]
+        if not wc_df.empty:
+            text = " ".join(wc_df["text_span"].astype(str).tolist())
+            wc = WordCloud(font_path="Font.ttc", background_color="white", width=800, height=400).generate(text)
+            plt.imshow(wc, interpolation="bilinear"); plt.axis("off")
+            st.pyplot(plt)
+        else:
+            st.info("無資料可生成文字雲")
 
 def raw_table():
     st.subheader("📋 原始評論資料")
@@ -304,11 +328,12 @@ else:
         month_kpis_and_subcats(last_label)
 
     elif section in {"trend_line", "filters"}:
-        trend_line_and_filters()
+        # 只渲染折線圖片段（含必要的篩選器）
+        trend_line_and_filters(mode="line")
 
     elif section in {"wordcloud"}:
-        # 簡化：直接呼叫 trend_line_and_filters，因為文字雲依賴互動選擇
-        trend_line_and_filters()
+        # 只渲染文字雲片段（含文字雲專用日期選擇器）
+        trend_line_and_filters(mode="wordcloud")
 
     elif section in {"raw_table", "table"}:
         raw_table()
