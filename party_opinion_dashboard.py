@@ -8,7 +8,45 @@ import jieba
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta, timezone
-import os# ===== 1. 資料讀取 =====
+import os
+
+# =========================
+# 0) 片段模式：讀取查詢參數
+# =========================
+def qget(name, default=None):
+    """讀取單一 query 參數（自動相容新舊 API）"""
+    try:
+        # Streamlit 1.30+（若是多值，取第一個）
+        val = st.query_params.get(name, default)
+        # st.query_params 回傳字串或 None；舊版會是 list
+        return val if not isinstance(val, list) else (val[0] if val else default)
+    except Exception:
+        return st.experimental_get_query_params().get(name, [default])[0]
+
+def qget_list(name):
+    """讀取以逗號分隔的多值參數為 list"""
+    raw = qget(name)
+    if raw is None or raw == "":
+        return None
+    return [s for s in map(str.strip, raw.split(",")) if s]
+
+section = (qget("section", "full") or "full").lower()
+embedded = str(qget("embedded", "false")).lower() in {"true", "1", "yes"}
+# 允許用 month=YYYY-MM 指定月份
+month_param = qget("month")  # 例如 "2025-09"
+
+# 內嵌模式：隱藏雜訊（給 iframe 漂亮畫面）
+if embedded:
+    st.markdown("""
+    <style>
+      header, footer {visibility: hidden;}
+      .stDeployButton, .viewerBadge_container__1QSob {display: none !important;}
+      .stAppToolbar {display: none !important;}
+      body {overflow: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+# ===== 1. 資料讀取 =====
 @st.cache_data(ttl=3600)
 def load_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -24,35 +62,40 @@ def load_data():
     df = pd.DataFrame(data)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date"])
+    # 全部時間的最小/最大月份（UTC）
+    df["_month_floor"] = df["date"].dt.to_period("M").dt.to_timestamp()
     return df
 
 df = load_data()
 
+# 小工具：依 month_label（YYYY-MM）切資料
+def month_slice(df, label_yyyy_mm: str):
+    month_start = pd.to_datetime(label_yyyy_mm + "-01").tz_localize("UTC")
+    next_month_start = (month_start + pd.offsets.MonthBegin(1))
+    prev_month_start = (month_start - pd.offsets.MonthBegin(1))
+    current_df = df[(df["date"] >= month_start) & (df["date"] < next_month_start)]
+    prev_df = df[(df["date"] >= prev_month_start) & (df["date"] < month_start)]
+    return month_start, current_df, prev_df
 
-# ===== 2. KPI 數據卡 =====
-st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
+# ===== 共用元件 =====
+def title_header():
+    st.markdown("<h1 style='text-align: center;'>台灣政黨線上評論分析儀表板</h1>", unsafe_allow_html=True)
 
-tab0, tab1 = st.tabs(["📊 儀表板", "📚 簡介"])
-
-with tab0:
-    if st.button("🔄 資料更新"):
-        st.cache_data.clear()
-        st.rerun()
-
-    st.subheader("📊 全期間政黨評論總覽")
-    col1, col2, col3, col4 = st.columns(4)
-
+def kpi_all_time():
     total_all = len(df)
     dpp_all = (df["target"] == "民主進步黨").sum()
     kmt_all = (df["target"] == "中國國民黨").sum()
     tpp_all = (df["target"] == "台灣民眾黨").sum()
 
+    st.subheader("📊 全期間政黨評論總覽")
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("總評論數", total_all)
     col2.metric("民進黨評論數", dpp_all)
     col3.metric("國民黨評論數", kmt_all)
     col4.metric("民眾黨評論數", tpp_all)
 
-    st.subheader("📊 評價子類別分布")
+def overall_subcats():
+    st.subheader("📊 評價子類別分布（全期間）")
     party_logos = {
         "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
         "國民黨": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Emblem_of_the_Kuomintang.svg",
@@ -78,58 +121,37 @@ with tab0:
         fig.update_yaxes(range=[0, df["subcategory"].value_counts().max() * 1.1])
         st.plotly_chart(fig, use_container_width=True, key=f"all-{party}-bar-chart")
 
-    # 選擇月份
-    # selected_month = st.date_input("📅 選擇月份", datetime.today().date().replace(day=1))
-    # 修改為根據 df["date"] 的最小和最大日期決定月份範圍
-    min_month = df["date"].min().to_period("M").to_timestamp()
-    max_month = df["date"].max().to_period("M").to_timestamp()
+def month_kpis_and_subcats(selected_label: str):
+    # KPI（當月 vs 上月）
+    month_start, current_df, prev_df = month_slice(df, selected_label)
 
-    month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
-    month_labels = [d.strftime("%Y-%m") for d in month_range]
-
-    selected_label = st.selectbox("📅 選擇月份", month_labels, index=len(month_labels)-1)
-    month_start = pd.to_datetime(selected_label + "-01").tz_localize("UTC")
-    next_month_start = (month_start + pd.offsets.MonthBegin(1))
-    prev_month_start = (month_start - pd.offsets.MonthBegin(1))
-    current_df = df[(df["date"] >= month_start) & (df["date"] < next_month_start)]
-    prev_df = df[(df["date"] >= prev_month_start) & (df["date"] < month_start)]
-    # print("current:", current_df['date'])
-    print("month_start", month_start.month)
-    # print(selected_label)
-    st.subheader("📊 {}月份政黨評論總量變化".format(month_start.month))
+    st.subheader(f"📊 {month_start.month} 月份政黨評論總量變化")
     col1, col2, col3, col4 = st.columns(4)
 
     total_now = len(current_df)
     total_prev = len(prev_df)
-    total_delta = total_now - total_prev
 
     dpp_now = (current_df["target"] == "民主進步黨").sum()
     dpp_prev = (prev_df["target"] == "民主進步黨").sum()
-    # print("dpp_now, dpp_prev: ", dpp_now, dpp_prev)
-    dpp_delta = dpp_now - dpp_prev
 
     kmt_now = (current_df["target"] == "中國國民黨").sum()
     kmt_prev = (prev_df["target"] == "中國國民黨").sum()
-    kmt_delta = kmt_now - kmt_prev
 
     tpp_now = (current_df["target"] == "台灣民眾黨").sum()
     tpp_prev = (prev_df["target"] == "台灣民眾黨").sum()
-    tpp_delta = tpp_now - tpp_prev
 
-    col1.metric("總評論數", total_now)
-    col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_delta:+}")
-    col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_delta:+}")
-    col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_delta:+}")
+    col1.metric("總評論數", total_now, delta=f"{total_now - total_prev:+}")
+    col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_now - dpp_prev:+}")
+    col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_now - kmt_prev:+}")
+    col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_now - tpp_prev:+}")
 
-    # ===== 3. 子類別分布圖（正負） =====
-    st.subheader("📊 評價子類別分布")
-
+    # 當月子類別分布
+    st.subheader("📊 評價子類別分布（當月）")
     party_logos = {
         "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
         "國民黨": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Emblem_of_the_Kuomintang.svg",
         "民眾黨": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Emblem_of_Taiwan_People%27s_Party_2019.svg"
     }
-
     parties = df["target"].unique()
     for party in parties:
         logo_url = party_logos.get(party, "")
@@ -140,17 +162,13 @@ with tab0:
         d = current_df[current_df["target"] == party]
         bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
         fig = px.bar(
-            bar,
-            x="subcategory",
-            y="count",
-            color="polarity",
-            barmode="group",
+            bar, x="subcategory", y="count", color="polarity", barmode="group",
             color_discrete_map={"positive": "lightgreen", "negative": "lightcoral"}
         )
         fig.update_yaxes(range=[0, 50])
         st.plotly_chart(fig, use_container_width=True, key=f"month-{party}-bar-chart")
 
-    # ===== 新增日期與政黨篩選 =====
+def trend_line_and_filters():
     st.subheader("🎯 選取日期與目標政黨")
     min_month = df["date"].dropna().min().to_period("M").to_timestamp()
     max_month = df["date"].dropna().max().to_period("M").to_timestamp()
@@ -171,7 +189,6 @@ with tab0:
     with col4:
         selected_polarity = st.multiselect("選擇正負極性", options=["全部", "positive", "negative"], default="全部")
 
-    # 篩選資料
     filtered = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
     if selected_parties:
         filtered = filtered[filtered["target"].isin(selected_parties)]
@@ -180,37 +197,19 @@ with tab0:
     if selected_polarity != ["全部"]:
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
-    # # ===== 4. 評價面向排名圖 =====
-    # st.subheader("🏅 評價子類別 + polarity 排名")
-    # rank = (
-    #     filtered.groupby(["target", "subcategory", "polarity"])
-    #     .size()
-    #     .reset_index(name="count")
-    #     .sort_values("count", ascending=False)
-    #     .head(10)
-    # )
-    # st.dataframe(rank, use_container_width=True, hide_index=True)
-
-    # ===== 5. 趨勢折線圖（每小時） =====
     st.subheader("📈 趨勢折線圖")
     filtered["day"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("D")
     line_df = filtered.groupby(["day", "target", "subcategory", "polarity"]).size().reset_index(name="count")
     line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
     line = alt.Chart(line_df).mark_line(point=True).encode(
-        x=alt.X(
-            "day:T",
-            title="日期",
-            axis=alt.Axis(format="%m/%d", labelAngle=0),
-            scale=alt.Scale(domain=[start_date, end_date])
-        ),
+        x=alt.X("day:T", title="日期", axis=alt.Axis(format="%m/%d", labelAngle=0), scale=alt.Scale(domain=[start_date, end_date])),
         y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
         color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
         tooltip=["day:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
     ).properties(width=800, height=400)
-
     st.altair_chart(line, use_container_width=True)
 
-    # ===== 6. 評價詞文字雲 =====
+    # 文字雲
     st.subheader("☁️ 評價詞文字雲")
     wc_party = st.selectbox("選擇政黨（文字雲）", df["target"].unique(), key="wordcloud_party")
     wc_subcat = st.selectbox("選擇子類別", ["全部"] + sorted(df["subcategory"].unique().tolist()), key="wordcloud_subcat")
@@ -223,17 +222,16 @@ with tab0:
     if not wc_df.empty:
         text = " ".join(wc_df["text_span"].astype(str).tolist())
         wc = WordCloud(font_path="Font.ttc", background_color="white", width=800, height=400).generate(text)
-        plt.imshow(wc, interpolation="bilinear")
-        plt.axis("off")
+        plt.imshow(wc, interpolation="bilinear"); plt.axis("off")
         st.pyplot(plt)
     else:
         st.info("無資料可生成文字雲")
 
-    # ===== 7. 原始資料表格 =====
+def raw_table():
     st.subheader("📋 原始評論資料")
     st.dataframe(df[["date", "target", "subcategory", "polarity", "text_span", "comment"]], use_container_width=True)
 
-with tab1:
+def intro_tab_content():
     st.markdown("### Appraisal framework")
     st.markdown("""
     Appraisal framework 是系統功能語言學中用來分析語言中表達評價、情感、態度等立場的理論架構。  
@@ -246,3 +244,77 @@ with tab1:
     - **Propriety 品德**：是否合乎道德與社會規範（如「正直」、「貪污」）
     - **Normality 常態性**：是否符合期待、是否奇怪（如「正常」、「怪異」）
     """)
+
+# =========================
+# 主要渲染（full 或 片段）
+# =========================
+if section == "full":
+    # 原本的完整頁面（含分頁）
+    title_header()
+    tab0, tab1 = st.tabs(["📊 儀表板", "📚 簡介"])
+
+    with tab0:
+        if st.button("🔄 資料更新"):
+            st.cache_data.clear()
+            st.rerun()
+
+        # 全期間 KPI + 子類別分布
+        kpi_all_time()
+        overall_subcats()
+
+        # 月份選單（互動版）
+        min_month = df["_month_floor"].min()
+        max_month = df["_month_floor"].max()
+        month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
+        month_labels = [d.strftime("%Y-%m") for d in month_range]
+        selected_label = st.selectbox("📅 選擇月份", month_labels, index=len(month_labels)-1)
+        month_kpis_and_subcats(selected_label)
+
+        # 篩選 + 趨勢 + 文字雲 + 原始表
+        trend_line_and_filters()
+        raw_table()
+
+    with tab1:
+        intro_tab_content()
+
+else:
+    # ===== 片段模式 =====
+    # 預設顯示標題，以免全空白；若不要標題可拿掉
+    title_header()
+
+    # month 參數：片段需要月份時可用
+    if month_param is None:
+        # 自動抓最後一個月份
+        last_label = df["_month_floor"].max().strftime("%Y-%m")
+    else:
+        last_label = month_param
+
+    # 根據 section 選擇要渲染的片段
+    if section in {"overview", "kpis_all_time"}:
+        kpi_all_time()
+
+    elif section in {"overall_subcats", "overall"}:
+        overall_subcats()
+
+    elif section in {"month_kpis", "month_overview"}:
+        month_kpis_and_subcats(last_label)
+
+    elif section in {"month_subcats"}:
+        # 同上，month_kpis_and_subcats 已含子類別分布
+        month_kpis_and_subcats(last_label)
+
+    elif section in {"trend_line", "filters"}:
+        trend_line_and_filters()
+
+    elif section in {"wordcloud"}:
+        # 簡化：直接呼叫 trend_line_and_filters，因為文字雲依賴互動選擇
+        trend_line_and_filters()
+
+    elif section in {"raw_table", "table"}:
+        raw_table()
+
+    elif section in {"intro"}:
+        intro_tab_content()
+
+    else:
+        st.info("未知的 section，請使用：overview / overall_subcats / month_kpis / trend_line / wordcloud / raw_table / intro / full")
