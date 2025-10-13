@@ -169,7 +169,7 @@ def month_kpis_and_subcats(selected_label: str):
         st.plotly_chart(fig, use_container_width=True, key=f"month-{party}-bar-chart")
 
 def trend_line_and_filters():
-    st.subheader("🎯 選取日期與目標政黨")
+    st.subheader("🎯 選取日期與目標政黨ddd")
     min_month = df["date"].dropna().min().to_period("M").to_timestamp()
     max_month = df["date"].dropna().max().to_period("M").to_timestamp()
     month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
