@@ -315,9 +315,6 @@ if section == "full":
 
 else:
     # ===== 片段模式 =====
-    # 預設顯示標題，以免全空白；若不要標題可拿掉
-    title_header()
-
     # month 參數：片段需要月份時可用
     if month_param is None:
         # 自動抓最後一個月份
