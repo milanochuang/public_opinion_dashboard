@@ -35,6 +35,13 @@ embedded = str(qget("embedded", "false")).lower() in {"true", "1", "yes"}
 # 允許用 month=YYYY-MM 指定月份
 month_param = qget("month")  # 例如 "2025-09"
 
+# 允許用 scale=0.8 之類的比例縮放整頁（給 iframe 用）
+_scale_raw = qget("scale", "1.0")
+try:
+    scale = float(_scale_raw)
+except Exception:
+    scale = 1.0
+
 # 內嵌模式：隱藏雜訊（給 iframe 漂亮畫面）
 if embedded:
     st.markdown("""
@@ -43,6 +50,30 @@ if embedded:
       .stDeployButton, .viewerBadge_container__1QSob {display: none !important;}
       .stAppToolbar {display: none !important;}
       body {overflow: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+# 若指定縮放比例，將整個 App 視覺縮放，方便在 iframe 中一頁看全
+if scale != 1.0:
+    st.markdown(f"""
+    <style>
+      /* 盡量廣泛支援：優先用 zoom；不支援時退回 transform */
+      @supports (zoom: 1) {{
+        .stApp {{
+          zoom: {scale};
+        }}
+      }}
+      @supports not (zoom: 1) {{
+        .stApp {{
+          transform: scale({scale});
+          transform-origin: top left;
+        }}
+        /* 避免縮放後被裁切，擴充可視區尺寸 */
+        html, body {{
+          width: calc(100% / {scale});
+          height: calc(100% / {scale});
+        }}
+      }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -195,7 +226,7 @@ def trend_line_and_filters(mode: str = "both"):
         with col4:
             selected_polarity = st.multiselect("選負極性", options=["全部", "positive", "negative"], default="全部")
     else:
-        # wordcloud-only 模式不顯示共用篩選，但仍計算預設起訖月作為文字雲的預設
+        # wordcloud-only 模式不顯示共用篩選，但仍計算預設起訖月作為文字雲的預設值
         min_month = df["date"].dropna().min().to_period("M").to_timestamp()
         max_month = df["date"].dropna().max().to_period("M").to_timestamp()
         start_date = min_month.tz_localize("UTC") if min_month.tzinfo is None else min_month
