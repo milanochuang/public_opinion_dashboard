@@ -397,7 +397,7 @@ def trend_line_and_filters(mode: str = "both"):
             y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
             color=alt.Color("line_group:N", title="政黨 + 子類別 + polarity"),
             tooltip=["day:T", "target:N", "subcategory:N", "polarity:N", "count:Q"]
-        ).properties(width=600, height=320)
+        ).properties(width=800, height=320)
         st.altair_chart(line, use_container_width=False)
 
     if mode in {"both", "wordcloud"}:
