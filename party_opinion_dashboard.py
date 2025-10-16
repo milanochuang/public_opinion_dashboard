@@ -9,6 +9,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta, timezone
 import os
+import streamlit.components.v1 as components
 
 # =========================
 # 0) 片段模式：讀取查詢參數
@@ -41,6 +42,13 @@ try:
     scale = float(_scale_raw)
 except Exception:
     scale = 1.0
+
+# 允許用 scroll=數字（像素）控制載入時自動往下滾動的距離
+_scroll_raw = qget("scroll", "0")
+try:
+    scroll_px = int(float(_scroll_raw))
+except Exception:
+    scroll_px = 0
 
 # 內嵌模式：隱藏雜訊（給 iframe 漂亮畫面）
 if embedded:
@@ -76,6 +84,21 @@ if scale != 1.0:
       }}
     </style>
     """, unsafe_allow_html=True)
+
+# 若指定了 scroll 參數，載入後自動將頁面往下滾動（單位：px）
+if scroll_px:
+    components.html(
+        f"""
+        <script>
+          // 等待一個小節點循環，確保 Streamlit 主要內容已排版完成
+          setTimeout(function() {{
+            // 往下滾動當前（Streamlit app）文件，而非外層 parent 網站
+            window.scrollTo({{ top: {scroll_px}, left: 0, behavior: 'auto' }});
+          }}, 200);
+        </script>
+        """,
+        height=0,
+    )
 
 # --- 全域樣式：把 checkbox 變成圓角按鈕（不依賴 :has，僅中性樣式） ---
 st.markdown(
@@ -303,6 +326,7 @@ def trend_line_and_filters(mode: str = "both"):
 
     # 上方共用篩選：僅在 both/line 模式顯示
     if mode in {"both", "line"}:
+        st.markdown('<a id="filters"></a>', unsafe_allow_html=True)
         st.subheader("🎯 選取日期與目標政黨")
         min_month = df["date"].dropna().min().to_period("M").to_timestamp()
         max_month = df["date"].dropna().max().to_period("M").to_timestamp()
