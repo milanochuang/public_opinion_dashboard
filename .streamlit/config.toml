@@ -1,8 +1,8 @@
 # .streamlit/config.toml
 [theme]
-base = "dark"  # 改為暗色主題
+base = "dark"  
 primaryColor = "#2563eb"
-backgroundColor = "#181818"  # 約為 RGB(0.094, 0.094, 0.094)
-secondaryBackgroundColor = "#202020"  # 稍微亮一階層
-textColor = "#f5f5f5"  # 淺灰白字以增加對比
+backgroundColor = "#181818"  
+secondaryBackgroundColor = "#202020" 
+textColor = "#f5f5f5"
 font = "sans serif"
