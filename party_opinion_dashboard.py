@@ -77,6 +77,96 @@ if scale != 1.0:
     </style>
     """, unsafe_allow_html=True)
 
+# --- 全域樣式：把 checkbox 變成圓角按鈕（不依賴 :has，僅中性樣式） ---
+st.markdown(
+    """
+    <style>
+      /* 將 Streamlit 的 checkbox 視覺成圓角按鈕（中性樣式） */
+      #party-row div[data-testid="stCheckbox"] > label,
+      #wc-party-row div[data-testid="stCheckbox"] > label,
+      .pill-row div[data-testid="stCheckbox"] > label { 
+        border: 1px solid #e5e7eb; border-radius: 999px; padding: 8px 14px; background: #fff; 
+        display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+        writing-mode: horizontal-tb; white-space: nowrap; line-height: 1.2;
+      }
+      /* 子類別/極性已選樣式（將由動態樣式覆蓋） */
+      .pill-row div[data-testid="stCheckbox"] > label.selected {
+        background: #111827; color: #fff; border-color: #111827;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# —— 全域間距微調：讓參數之間更緊湊 ——
+st.markdown(
+    """
+    <style>
+      /* —— 全域間距微調：讓參數之間更緊湊 —— */
+      /* 1) 調小各種控件的下邊距 */
+      div[data-testid="stSelectbox"],
+      div[data-testid="stMultiSelect"],
+      div[data-testid="stDateInput"],
+      div[data-testid="stSlider"],
+      div[data-testid="stCheckbox"] {
+        margin-bottom: 0.25rem !important; /* 原本約 0.75–1rem */
+      }
+
+      /* 2) 勾選膠囊的間距與尺寸更緊湊 */
+      #party-row div[data-testid="stCheckbox"] > label,
+      #wc-party-row div[data-testid="stCheckbox"] > label {
+        padding: 4px 8px; /* 再收斂：按鈕本體更薄 */
+        margin-right: 0; /* 垂直排列不需要右間距 */
+        margin-bottom: 0; /* 壓掉 label 本身的底邊距 */
+        line-height: 1.0;
+      }
+      .pill-row div[data-testid="stCheckbox"] > label {
+        padding: 6px 10px;
+        margin-right: 6px;
+      }
+
+      /* 3) 控件群組上下留白變小（小標題/群組之間） */
+      .block-container h2, .block-container h3, .block-container h4 { 
+        margin-top: 0.4rem !important; 
+        margin-bottom: 0.4rem !important;
+      }
+
+      /* 4) 讓列狀容器之間的上下距離縮小 */
+      .pill-row { margin-bottom: 0.25rem; }
+
+      /* 5) 兩欄月份選擇器的欄內留白也收斂一些 */
+      section[data-testid="stHorizontalBlock"] > div > div { padding-bottom: 0.25rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 壓掉多餘空白：移除固定高度，統一用小間距堆疊
+st.markdown(
+    """
+    <style>
+      /* 壓掉多餘空白：移除固定高度，統一用小間距堆疊 */
+      #date-col, #wc-date-col {
+        display: flex; flex-direction: column; gap: 6px; /* 兩個月份下拉之間的距離 */
+        min-height: auto; justify-content: flex-start; align-items: stretch;
+      }
+      #party-col, #wc-party-col {
+        display: flex; flex-direction: column; gap: 2px; /* 三個政黨之間的距離 */
+        min-height: auto; justify-content: flex-start; align-items: stretch;
+      }
+      /* 讓每個政黨膠囊/checkbox 更貼近 */
+      #party-col div[data-testid="stCheckbox"], #wc-party-col div[data-testid="stCheckbox"] {
+        margin-bottom: 0 !important; padding-bottom: 0 !important;
+      }
+      /* 壓掉外層 block 可能的底部留白 */
+      #party-col > div, #wc-party-col > div, #date-col > div, #wc-date-col > div { 
+        margin-bottom: 0 !important; padding-bottom: 0 !important; 
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ===== 1. 資料讀取 =====
 @st.cache_data(ttl=3600)
 def load_data():
@@ -212,19 +302,77 @@ def trend_line_and_filters(mode: str = "both"):
         month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
         month_labels = [d.strftime("%Y-%m") for d in month_range]
 
-        col1, col2, col3, col4 = st.columns(4)
+        # 日期（左）與政黨（右）同一列：column1 / column2
+        col1, col2 = st.columns(2)
         with col1:
-            start_label = st.selectbox("起始月份", month_labels, index=0, key="start_month")
-            end_label = st.selectbox("結束月份", month_labels, index=len(month_labels)-1, key="end_month")
+            st.markdown('<div id="date-col">', unsafe_allow_html=True)
+            start_label = st.selectbox("起始月份（趨勢圖）", month_labels, index=0, key="start_month")
+            end_label = st.selectbox("結束月份（趨勢圖）", month_labels, index=len(month_labels)-1, key="end_month")
+            st.markdown('</div>', unsafe_allow_html=True)
             start_date = pd.to_datetime(start_label + "-01").tz_localize("UTC")
             end_date = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1)).tz_localize("UTC")
         with col2:
-            selected_parties = st.multiselect("選擇政黨", options=df["target"].unique().tolist(), default=df["target"].unique().tolist())
-        with col3:
-            all_subcats = sorted(df["subcategory"].dropna().unique().tolist())
-            selected_subcats = st.multiselect("選擇子類別", options=["全部"] + all_subcats, default="全部")
-        with col4:
-            selected_polarity = st.multiselect("選負極性", options=["全部", "positive", "negative"], default="全部")
+            st.markdown("**政黨**（不勾選 = 全部）")
+            st.markdown('<div id="party-col">', unsafe_allow_html=True)
+            parties_present = df["target"].dropna().unique().tolist()
+            dpp_on = st.checkbox("民主進步黨", key="party_dpp", value=False)
+            kmt_on = st.checkbox("中國國民黨", key="party_kmt", value=False)
+            tpp_on = st.checkbox("台灣民眾黨", key="party_tpp", value=False)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # 依勾選結果決定篩選（無勾選 = 全部）
+        selected_parties = []
+        if dpp_on and "民主進步黨" in parties_present:
+            selected_parties.append("民主進步黨")
+        if kmt_on and "中國國民黨" in parties_present:
+            selected_parties.append("中國國民黨")
+        if tpp_on and "台灣民眾黨" in parties_present:
+            selected_parties.append("台灣民眾黨")
+        if not selected_parties:
+            selected_parties = [p for p in ["民主進步黨", "中國國民黨", "台灣民眾黨"] if p in parties_present]
+
+        # --- 子類別一整列平均散佈 ---
+        # 全寬 row
+        st.markdown("**子類別（Judgement）**（不勾選 = 全部）")
+        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
+        all_subcats = [s for s in sorted(df["subcategory"].dropna().unique().tolist())]
+        ncols = 6 if len(all_subcats) >= 12 else 4 if len(all_subcats) > 6 else 3
+        sc_cols = st.columns(ncols)
+        sc_checks = []
+        for i, s in enumerate(all_subcats):
+            with sc_cols[i % ncols]:
+                sc_checks.append((s, st.checkbox(s, key=f"subcat_btn_{s}", value=False)))
+        st.markdown('</div>', unsafe_allow_html=True)
+        selected_subcats = [s for s, on in sc_checks if on]
+        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
+        st.markdown(
+            """
+            <style>
+              .pill-row div[data-testid='stCheckbox'] input:checked + label { background:#111827 !important; color:#fff !important; border-color:#111827 !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # --- 極性獨立成列 ---
+        st.markdown("**極性**（不勾選 = 全部）")
+        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
+        pol_cols = st.columns(3)
+        with pol_cols[0]:
+            pol_pos = st.checkbox("positive", key="pol_btn_pos", value=False)
+        with pol_cols[1]:
+            pol_neg = st.checkbox("negative", key="pol_btn_neg", value=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+        selected_polarity = [p for p, on in [("positive", pol_pos), ("negative", pol_neg)] if on]
+        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
+        st.markdown(
+            """
+            <style>
+              .pill-row div[data-testid='stCheckbox'] input:checked + label { background:#111827 !important; color:#fff !important; border-color:#111827 !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
         # wordcloud-only 模式不顯示共用篩選，但仍計算預設起訖月作為文字雲的預設值
         min_month = df["date"].dropna().min().to_period("M").to_timestamp()
@@ -236,11 +384,11 @@ def trend_line_and_filters(mode: str = "both"):
         selected_polarity = ["全部"]
 
     filtered = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
-    if selected_parties:
+    if selected_parties:  # 有勾選才過濾；否則保留全部
         filtered = filtered[filtered["target"].isin(selected_parties)]
-    if selected_subcats != ["全部"]:
+    if selected_subcats:  # 有勾選才過濾
         filtered = filtered[filtered["subcategory"].isin(selected_subcats)]
-    if selected_polarity != ["全部"]:
+    if selected_polarity:  # 有勾選才過濾
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
     if mode in {"both", "line"}:
@@ -257,39 +405,95 @@ def trend_line_and_filters(mode: str = "both"):
         st.altair_chart(line, use_container_width=True)
 
     if mode in {"both", "wordcloud"}:
-        # 文字雲
         st.subheader("☁️ 評價詞文字雲")
-        wc_party = st.selectbox("選擇政黨（文字雲）", df["target"].unique(), key="wordcloud_party")
-        wc_subcat = st.selectbox("選擇子類別", ["全部"] + sorted(df["subcategory"].unique().tolist()), key="wordcloud_subcat")
-        wc_polarity = st.selectbox("選擇正負極性", ["全部", "positive", "negative"], key="wordcloud_polarity")
 
-        # 新增：文字雲專用日期範圍選取（以當前篩選的起訖作為預設值）
-        # 備註：date_input 回傳日期（無時區），此處將其轉為 UTC 的起訖時間區間 [wc_start_utc, wc_end_utc)
-        default_wc_start = (start_date.tz_convert("UTC") if hasattr(start_date, "tzinfo") and start_date.tzinfo else start_date).date()
-        default_wc_end = (end_date.tz_convert("UTC") if hasattr(end_date, "tzinfo") and end_date.tzinfo else end_date).date()
-        wc_date_range = st.date_input(
-            "選擇日期範圍（文字雲）",
-            value=(default_wc_start, default_wc_end),
-            key="wordcloud_date_range"
+        # 參數：月份範圍（與趨勢圖相同的月份選擇器）
+        min_month_wc = df["date"].dropna().min().to_period("M").to_timestamp()
+        max_month_wc = df["date"].dropna().max().to_period("M").to_timestamp()
+        month_range_wc = pd.date_range(start=min_month_wc, end=max_month_wc, freq="MS")
+        month_labels_wc = [d.strftime("%Y-%m") for d in month_range_wc]
+
+        # 日期（左）與政黨（右）同一列：column1 / column2
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div id="wc-date-col">', unsafe_allow_html=True)
+            wc_start_label = st.selectbox("起始月份（文字雲）", month_labels_wc, index=0, key="wc_start_month")
+            wc_end_label = st.selectbox("結束月份（文字雲）", month_labels_wc, index=len(month_labels_wc)-1, key="wc_end_month")
+            st.markdown('</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("**政黨**（不勾選 = 全部）")
+            st.markdown('<div id="wc-party-col">', unsafe_allow_html=True)
+            parties_present_wc = df["target"].dropna().unique().tolist()
+            wc_dpp_on = st.checkbox("民主進步黨", key="wc_party_dpp", value=False)
+            wc_kmt_on = st.checkbox("中國國民黨", key="wc_party_kmt", value=False)
+            wc_tpp_on = st.checkbox("台灣民眾黨", key="wc_party_tpp", value=False)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        wc_start_utc = pd.to_datetime(wc_start_label + "-01").tz_localize("UTC")
+        wc_end_utc = (pd.to_datetime(wc_end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
+        wc_selected_parties = []
+        if wc_dpp_on and "民主進步黨" in parties_present_wc:
+            wc_selected_parties.append("民主進步黨")
+        if wc_kmt_on and "中國國民黨" in parties_present_wc:
+            wc_selected_parties.append("中國國民黨")
+        if wc_tpp_on and "台灣民眾黨" in parties_present_wc:
+            wc_selected_parties.append("台灣民眾黨")
+        if not wc_selected_parties:
+            wc_selected_parties = [p for p in ["民主進步黨", "中國國民黨", "台灣民眾黨"] if p in parties_present_wc]
+
+        # 子類別列（不勾選 = 全部）
+        st.markdown("**子類別（Judgement）**（不勾選 = 全部）")
+        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
+        wc_all_subcats = [s for s in sorted(df["subcategory"].dropna().unique().tolist())]
+        wc_ncols = 6 if len(wc_all_subcats) >= 12 else 4 if len(wc_all_subcats) > 6 else 3
+        wc_sc_cols = st.columns(wc_ncols)
+        wc_sc_checks = []
+        for i, s in enumerate(wc_all_subcats):
+            with wc_sc_cols[i % wc_ncols]:
+                wc_sc_checks.append((s, st.checkbox(s, key=f"wc_subcat_btn_{s}", value=False)))
+        st.markdown('</div>', unsafe_allow_html=True)
+        wc_selected_subcats = [s for s, on in wc_sc_checks if on]
+        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
+        st.markdown(
+            """
+            <style>
+              .pill-row div[data-testid='stCheckbox'] input:checked + label { background:#111827 !important; color:#fff !important; border-color:#111827 !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
         )
-        if isinstance(wc_date_range, (list, tuple)) and len(wc_date_range) == 2:
-            wc_start_utc = pd.to_datetime(wc_date_range[0]).tz_localize("UTC")
-            wc_end_utc = (pd.to_datetime(wc_date_range[1]) + pd.Timedelta(days=1)).tz_localize("UTC")
-        else:
-            # 若使用者只選單日，視為該日整天
-            wc_start_utc = pd.to_datetime(wc_date_range).tz_localize("UTC")
-            wc_end_utc = (pd.to_datetime(wc_date_range) + pd.Timedelta(days=1)).tz_localize("UTC")
 
-        # 依文字雲日期範圍過濾
-        wc_df = df[(df["target"] == wc_party) & (df["date"] >= wc_start_utc) & (df["date"] < wc_end_utc)]
-        if wc_subcat != "全部":
-            wc_df = wc_df[wc_df["subcategory"] == wc_subcat]
-        if wc_polarity != "全部":
-            wc_df = wc_df[wc_df["polarity"] == wc_polarity]
-        if not wc_df.empty:
-            text = " ".join(wc_df["text_span"].astype(str).tolist())
-            wc = WordCloud(font_path="Font.ttc", background_color="white", width=800, height=400).generate(text)
-            plt.imshow(wc, interpolation="bilinear"); plt.axis("off")
+        # 極性列（不勾選 = 全部）
+        st.markdown("**極性**（不勾選 = 全部）")
+        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
+        wc_pol_cols = st.columns(3)
+        with wc_pol_cols[0]:
+            wc_pol_pos = st.checkbox("positive", key="wc_pol_btn_pos", value=False)
+        with wc_pol_cols[1]:
+            wc_pol_neg = st.checkbox("negative", key="wc_pol_btn_neg", value=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+        wc_selected_polarity = [p for p, on in [("positive", wc_pol_pos), ("negative", wc_pol_neg)] if on]
+        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
+        st.markdown(
+            """
+            <style>
+              .pill-row div[data-testid='stCheckbox'] input:checked + label { background:#111827 !important; color:#fff !important; border-color:#111827 !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # 依參數產生單一文字雲（多黨則合併文字）
+        wdf = df[(df["target"].isin(wc_selected_parties)) & (df["date"] >= wc_start_utc) & (df["date"] < wc_end_utc)]
+        if wc_selected_subcats:
+            wdf = wdf[wdf["subcategory"].isin(wc_selected_subcats)]
+        if wc_selected_polarity:
+            wdf = wdf[wdf["polarity"].isin(wc_selected_polarity)]
+
+        if not wdf.empty:
+            text = " ".join(wdf["text_span"].astype(str).tolist())
+            wc_img = WordCloud(font_path="Font.ttc", background_color="white", width=900, height=420).generate(text)
+            plt.imshow(wc_img, interpolation="bilinear"); plt.axis("off")
             st.pyplot(plt)
         else:
             st.info("無資料可生成文字雲")
