@@ -154,6 +154,13 @@ st.markdown(
         display: flex; flex-direction: column; gap: 2px; /* 三個政黨之間的距離 */
         min-height: auto; justify-content: flex-start; align-items: stretch;
       }
+      #pol-col, #wc-pol-col {
+        display: flex; flex-direction: column; gap: 2px;
+        min-height: auto; justify-content: flex-start; align-items: stretch;
+      }
+      #pol-col div[data-testid="stCheckbox"], #wc-pol-col div[data-testid="stCheckbox"] {
+        margin-bottom: 0 !important; padding-bottom: 0 !important;
+      }
       /* 讓每個政黨膠囊/checkbox 更貼近 */
       #party-col div[data-testid="stCheckbox"], #wc-party-col div[data-testid="stCheckbox"] {
         margin-bottom: 0 !important; padding-bottom: 0 !important;
@@ -302,23 +309,23 @@ def trend_line_and_filters(mode: str = "both"):
         month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
         month_labels = [d.strftime("%Y-%m") for d in month_range]
 
-        # 日期（左）與政黨（右）同一列：column1 / column2
-        col1, col2 = st.columns(2)
+        # 日期（左）・政黨（中）・極性（右）同一列（等寬 1:1:1）
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
-            st.markdown('<div id="date-col">', unsafe_allow_html=True)
             start_label = st.selectbox("起始月份（趨勢圖）", month_labels, index=0, key="start_month")
             end_label = st.selectbox("結束月份（趨勢圖）", month_labels, index=len(month_labels)-1, key="end_month")
-            st.markdown('</div>', unsafe_allow_html=True)
             start_date = pd.to_datetime(start_label + "-01").tz_localize("UTC")
             end_date = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1)).tz_localize("UTC")
         with col2:
             st.markdown("**政黨**（不勾選 = 全部）")
-            st.markdown('<div id="party-col">', unsafe_allow_html=True)
             parties_present = df["target"].dropna().unique().tolist()
             dpp_on = st.checkbox("民主進步黨", key="party_dpp", value=False)
             kmt_on = st.checkbox("中國國民黨", key="party_kmt", value=False)
             tpp_on = st.checkbox("台灣民眾黨", key="party_tpp", value=False)
-            st.markdown('</div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown("**極性**（不勾選 = 全部）")
+            pol_pos = st.checkbox("positive", key="pol_btn_pos", value=False)
+            pol_neg = st.checkbox("negative", key="pol_btn_neg", value=False)
 
         # 依勾選結果決定篩選（無勾選 = 全部）
         selected_parties = []
@@ -353,18 +360,8 @@ def trend_line_and_filters(mode: str = "both"):
             """,
             unsafe_allow_html=True,
         )
-
-        # --- 極性獨立成列 ---
-        st.markdown("**極性**（不勾選 = 全部）")
-        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
-        pol_cols = st.columns(3)
-        with pol_cols[0]:
-            pol_pos = st.checkbox("positive", key="pol_btn_pos", value=False)
-        with pol_cols[1]:
-            pol_neg = st.checkbox("negative", key="pol_btn_neg", value=False)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # --- 極性已合併至三欄，同步取得 selected_polarity ---
         selected_polarity = [p for p, on in [("positive", pol_pos), ("negative", pol_neg)] if on]
-        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
         st.markdown(
             """
             <style>
@@ -413,21 +410,21 @@ def trend_line_and_filters(mode: str = "both"):
         month_range_wc = pd.date_range(start=min_month_wc, end=max_month_wc, freq="MS")
         month_labels_wc = [d.strftime("%Y-%m") for d in month_range_wc]
 
-        # 日期（左）與政黨（右）同一列：column1 / column2
-        col1, col2 = st.columns(2)
+        # 日期（左）・政黨（中）・極性（右）同一列（等寬 1:1:1）
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
-            st.markdown('<div id="wc-date-col">', unsafe_allow_html=True)
             wc_start_label = st.selectbox("起始月份（文字雲）", month_labels_wc, index=0, key="wc_start_month")
             wc_end_label = st.selectbox("結束月份（文字雲）", month_labels_wc, index=len(month_labels_wc)-1, key="wc_end_month")
-            st.markdown('</div>', unsafe_allow_html=True)
         with col2:
             st.markdown("**政黨**（不勾選 = 全部）")
-            st.markdown('<div id="wc-party-col">', unsafe_allow_html=True)
             parties_present_wc = df["target"].dropna().unique().tolist()
             wc_dpp_on = st.checkbox("民主進步黨", key="wc_party_dpp", value=False)
             wc_kmt_on = st.checkbox("中國國民黨", key="wc_party_kmt", value=False)
             wc_tpp_on = st.checkbox("台灣民眾黨", key="wc_party_tpp", value=False)
-            st.markdown('</div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown("**極性**（不勾選 = 全部）")
+            wc_pol_pos = st.checkbox("positive", key="wc_pol_btn_pos", value=False)
+            wc_pol_neg = st.checkbox("negative", key="wc_pol_btn_neg", value=False)
 
         wc_start_utc = pd.to_datetime(wc_start_label + "-01").tz_localize("UTC")
         wc_end_utc = (pd.to_datetime(wc_end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
@@ -462,18 +459,8 @@ def trend_line_and_filters(mode: str = "both"):
             """,
             unsafe_allow_html=True,
         )
-
-        # 極性列（不勾選 = 全部）
-        st.markdown("**極性**（不勾選 = 全部）")
-        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
-        wc_pol_cols = st.columns(3)
-        with wc_pol_cols[0]:
-            wc_pol_pos = st.checkbox("positive", key="wc_pol_btn_pos", value=False)
-        with wc_pol_cols[1]:
-            wc_pol_neg = st.checkbox("negative", key="wc_pol_btn_neg", value=False)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # 極性已合併至三欄，同步取得 wc_selected_polarity
         wc_selected_polarity = [p for p, on in [("positive", wc_pol_pos), ("negative", wc_pol_neg)] if on]
-        # 讓被勾選的子類別/極性膠囊視覺加深（不依賴 :has）
         st.markdown(
             """
             <style>
