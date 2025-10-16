@@ -389,7 +389,6 @@ def trend_line_and_filters(mode: str = "both"):
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
     if mode in {"both", "line"}:
-        st.subheader("📈 趨勢折線圖")
         filtered["day"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("D")
         line_df = filtered.groupby(["day", "target", "subcategory", "polarity"]).size().reset_index(name="count")
         line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
