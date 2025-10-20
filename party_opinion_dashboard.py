@@ -272,9 +272,150 @@ def overall_subcats():
         fig.update_yaxes(range=[0, df["subcategory"].value_counts().max() * 1.1])
         st.plotly_chart(fig, use_container_width=True, key=f"all-{party}-bar-chart")
 
-def month_kpis_and_subcats(selected_label: str):
-    # KPI（當月 vs 上月）
-    month_start, current_df, prev_df = month_slice(df, selected_label)
+
+# ===== 新增：以文章為單位顯示推文 =====
+import pandas as pd
+import streamlit as st
+
+def article_thread_view(
+    df: pd.DataFrame,
+    default_start: str | None = None,
+    default_end: str | None = None,
+    page_size: int = 10,
+):
+    """
+    以文章為單位顯示：文章資訊 + 該文所有推文。
+    需求欄位：
+      - article_id, article_title, content, url, article_datetime
+      - comment, target, subcategory, text_span, polarity, date, puship_datetime, other_comment
+    """
+    def _to_dt(x):
+        try:
+            return pd.to_datetime(x, errors="coerce", utc=True)
+        except Exception:
+            return pd.NaT
+    for col in ["date", "puship_datetime", "article_datetime"]:
+        if col in df.columns:
+            if not pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].apply(_to_dt)
+    with st.sidebar:
+        st.markdown("### 文章彙整篩選")
+        # 與前面一致：以月份選擇起訖
+        min_month = df["date"].dropna().min().to_period("M").to_timestamp()
+        max_month = df["date"].dropna().max().to_period("M").to_timestamp()
+        month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
+        month_labels = [d.strftime("%Y-%m") for d in month_range]
+        start_label = st.selectbox("起始月份（文章彙整）", month_labels, index=0, key="thread_start_month")
+        end_label = st.selectbox("結束月份（文章彙整）", month_labels, index=len(month_labels)-1, key="thread_end_month")
+        start_utc = pd.to_datetime(start_label + "-01").tz_localize("UTC")
+        end_utc = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
+        q = st.text_input("搜尋（標題／內文／網址）", placeholder="輸入關鍵字...").strip()
+        parties = sorted(df["target"].dropna().unique().tolist()) if "target" in df.columns else []
+        subcats = sorted(df["subcategory"].dropna().unique().tolist()) if "subcategory" in df.columns else []
+        pols = sorted(df["polarity"].dropna().unique().tolist()) if "polarity" in df.columns else []
+        sel_parties = st.multiselect("政黨（推文）", parties, default=[])
+        sel_subcats = st.multiselect("子類別（推文）", subcats, default=[])
+        sel_pols = st.multiselect("極性（推文）", pols, default=[])
+        sort_by = st.selectbox("文章排序依據", ["最新在前", "最舊在前", "最多推文在前", "最少推文在前"], index=0)
+    # ===== 以「符合篩選條件的推文（每筆）」為主體 =====
+    # 1) 先用月份區間過濾（以文章時間為主；若沒有則用推文時間或 date）
+    base = df.copy()
+    if "article_datetime" in base.columns and not base["article_datetime"].isna().all():
+        base = base[(base["article_datetime"] >= start_utc) & (base["article_datetime"] < end_utc)]
+    else:
+        time_col = "puship_datetime" if "puship_datetime" in base.columns else "date"
+        base = base[(base[time_col] >= start_utc) & (base[time_col] < end_utc)]
+
+    # 2) 關鍵字搜尋（針對文章標題/內文/網址）
+    if q:
+        q_lower = q.lower()
+        for col in ["article_title", "content", "url"]:
+            if col not in base.columns:
+                base[col] = ""
+        mask = (
+            base["article_title"].astype(str).str.lower().str.contains(q_lower, na=False)
+            | base["content"].astype(str).str.lower().str.contains(q_lower, na=False)
+            | base["url"].astype(str).str.lower().str.contains(q_lower, na=False)
+        )
+        base = base[mask]
+
+    # 3) 依政黨/子類別/極性過濾（以推文欄位為準）
+    if sel_parties:
+        base = base[base["target"].isin(sel_parties)]
+    if sel_subcats:
+        base = base[base["subcategory"].isin(sel_subcats)]
+    if sel_pols:
+        base = base[base["polarity"].isin(sel_pols)]
+
+    # 4) 排序（沿用 UI；「最多/最少推文在前」改以日期排序）
+    if sort_by in ["最新在前", "最多推文在前"]:
+        key_col = "article_datetime" if ("article_datetime" in base.columns and not base["article_datetime"].isna().all()) else ("puship_datetime" if "puship_datetime" in base.columns else "date")
+        base = base.sort_values(by=[key_col], ascending=False)
+    elif sort_by in ["最舊在前", "最少推文在前"]:
+        key_col = "article_datetime" if ("article_datetime" in base.columns and not base["article_datetime"].isna().all()) else ("puship_datetime" if "puship_datetime" in base.columns else "date")
+        base = base.sort_values(by=[key_col], ascending=True)
+
+    # 5) 分頁（每一筆推文=一張卡）
+    total_comments = len(base)
+    if total_comments == 0:
+        st.info("沒有符合條件的推文。")
+        return
+    n_pages = (total_comments + page_size - 1) // page_size
+    page = st.number_input("頁碼", min_value=1, max_value=max(1, n_pages), value=1, step=1)
+    start_idx = (page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_comments)
+    page_df = base.iloc[start_idx:end_idx]
+
+    st.caption(f"顯示第 {start_idx+1}–{end_idx} 筆，共 {total_comments} 筆")
+
+    # 6) 逐筆渲染：標題= comment · polarity · subcategory；展開後顯示文章資訊與 other_comment 表
+    import ast
+    for _, r in page_df.iterrows():
+        comment_txt = str(r.get("comment", "")).strip()
+        pol = str(r.get("polarity", "")).strip()
+        subcat = str(r.get("subcategory", "")).strip()
+        expander_title = f"💬 {comment_txt} · {pol} · {subcat}" if comment_txt else "💬 （無推文內容）"
+        with st.expander(expander_title, expanded=False):
+            # 文章資訊
+            art_title = r.get("article_title", "")
+            url = r.get("url", "")
+            aid = r.get("article_id", "")
+            st.markdown(f"**{art_title or '(無標題)'}**")
+            if url:
+                st.markdown(f"[前往原文]({url})")
+            if aid:
+                st.caption(f"article_id: {aid}")
+            content = r.get("content", "")
+            if isinstance(content, str) and content.strip():
+                st.markdown("**內文**")
+                st.write(content)
+
+            # other_comment 展開成表格（每列一則）
+            oc_raw = r.get("other_comment", None)
+            rows = []
+            if pd.notna(oc_raw):
+                try:
+                    lst = ast.literal_eval(str(oc_raw))
+                    if isinstance(lst, list):
+                        rows = [{"推文內容": str(x)} for x in lst]
+                    else:
+                        rows = [{"推文內容": str(oc_raw)}]
+                except Exception:
+                    rows = [{"推文內容": str(oc_raw)}]
+            if rows:
+                oc_df = pd.DataFrame(rows)
+                st.dataframe(oc_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("此筆資料沒有其他推文。")
+
+    # 7) 匯出目前頁面的推文（僅當頁）
+    if st.button("下載目前頁面的推文 CSV"):
+        st.download_button(
+            "下載 CSV",
+            page_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="comments_page.csv",
+            mime="text/csv"
+        )
 
 def trend_line_and_filters(mode: str = "both"):
     """Render filters + (line chart and/or wordcloud) depending on mode.
@@ -508,11 +649,11 @@ if section == "full":
         kpi_all_time()
         overall_subcats()
 
-        
-
         # 篩選 + 趨勢 + 文字雲 + 原始表
         trend_line_and_filters()
         raw_table()
+        st.subheader("🧵 文章與推文彙整（依文章聚合）")
+        article_thread_view(df, page_size=8)
 
     with tab1:
         intro_tab_content()
@@ -533,12 +674,6 @@ else:
     elif section in {"overall_subcats", "overall"}:
         overall_subcats()
 
-    elif section in {"month_kpis", "month_overview"}:
-        month_kpis_and_subcats(last_label)
-
-    elif section in {"month_subcats"}:
-        # 同上，month_kpis_and_subcats 已含子類別分布
-        month_kpis_and_subcats(last_label)
 
     elif section in {"trend_line", "filters"}:
         trend_line_and_filters(mode="line")
@@ -553,4 +688,4 @@ else:
         intro_tab_content()
 
     else:
-        st.info("未知的 section，請使用：overview / overall_subcats / month_kpis / trend_line / wordcloud / raw_table / intro / full")
+        st.info("未知的 section，請使用：overview / overall_subcats / trend_line / wordcloud / raw_table / intro / full")
