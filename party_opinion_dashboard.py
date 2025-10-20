@@ -276,49 +276,6 @@ def month_kpis_and_subcats(selected_label: str):
     # KPI（當月 vs 上月）
     month_start, current_df, prev_df = month_slice(df, selected_label)
 
-    st.subheader(f"📊 {month_start.month} 月份政黨評論總量變化")
-    col1, col2, col3, col4 = st.columns(4)
-
-    total_now = len(current_df)
-    total_prev = len(prev_df)
-
-    dpp_now = (current_df["target"] == "民主進步黨").sum()
-    dpp_prev = (prev_df["target"] == "民主進步黨").sum()
-
-    kmt_now = (current_df["target"] == "中國國民黨").sum()
-    kmt_prev = (prev_df["target"] == "中國國民黨").sum()
-
-    tpp_now = (current_df["target"] == "台灣民眾黨").sum()
-    tpp_prev = (prev_df["target"] == "台灣民眾黨").sum()
-
-    col1.metric("總評論數", total_now, delta=f"{total_now - total_prev:+}")
-    col2.metric("民進黨評論數", dpp_now, delta=f"{dpp_now - dpp_prev:+}")
-    col3.metric("國民黨評論數", kmt_now, delta=f"{kmt_now - kmt_prev:+}")
-    col4.metric("民眾黨評論數", tpp_now, delta=f"{tpp_now - tpp_prev:+}")
-
-    # 當月子類別分布
-    st.subheader("📊 評價子類別分布（當月）")
-    party_logos = {
-        "民進黨": "https://upload.wikimedia.org/wikipedia/zh/c/c1/Emblem_of_Democratic_Progressive_Party_%28new%29.svg",
-        "國民黨": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Emblem_of_the_Kuomintang.svg",
-        "民眾黨": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Emblem_of_Taiwan_People%27s_Party_2019.svg"
-    }
-    parties = df["target"].unique()
-    for party in parties:
-        logo_url = party_logos.get(party, "")
-        st.markdown(
-            f"<h4><img src='{logo_url}' width='30' style='vertical-align: middle;'> {party}</h4>",
-            unsafe_allow_html=True
-        )
-        d = current_df[current_df["target"] == party]
-        bar = d.groupby(["subcategory", "polarity"]).size().reset_index(name="count")
-        fig = px.bar(
-            bar, x="subcategory", y="count", color="polarity", barmode="group",
-            color_discrete_map={"positive": "lightgreen", "negative": "lightcoral"}
-        )
-        fig.update_yaxes(range=[0, 50])
-        st.plotly_chart(fig, use_container_width=True, key=f"month-{party}-bar-chart")
-
 def trend_line_and_filters(mode: str = "both"):
     """Render filters + (line chart and/or wordcloud) depending on mode.
     mode ∈ {"both", "line", "wordcloud"}
@@ -551,13 +508,7 @@ if section == "full":
         kpi_all_time()
         overall_subcats()
 
-        # 月份選單（互動版）
-        min_month = df["_month_floor"].min()
-        max_month = df["_month_floor"].max()
-        month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
-        month_labels = [d.strftime("%Y-%m") for d in month_range]
-        selected_label = st.selectbox("📅 選擇月份", month_labels, index=len(month_labels)-1)
-        month_kpis_and_subcats(selected_label)
+        
 
         # 篩選 + 趨勢 + 文字雲 + 原始表
         trend_line_and_filters()
