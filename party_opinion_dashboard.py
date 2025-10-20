@@ -327,7 +327,7 @@ def article_thread_view(
 
         start_utc = pd.to_datetime(start_label + "-01").tz_localize("UTC")
         end_utc = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
-        q = st.text_input("搜尋（標題／內文／網址）", placeholder="輸入關鍵字...").strip()
+        q = st.text_input("搜尋（推文 comment）", placeholder="輸入關鍵字...").strip()
 
         # 子類別（用勾選；不勾選 = 全部）
         st.markdown("**子類別（Judgement）**（不勾選 = 全部）")
@@ -351,17 +351,11 @@ def article_thread_view(
         time_col = "puship_datetime" if "puship_datetime" in base.columns else "date"
         base = base[(base[time_col] >= start_utc) & (base[time_col] < end_utc)]
 
-    # 2) 關鍵字搜尋（針對文章標題/內文/網址）
+    # 2) 關鍵字搜尋（針對 comment 欄位）
     if q:
-        q_lower = q.lower()
-        for col in ["article_title", "content", "url"]:
-            if col not in base.columns:
-                base[col] = ""
-        mask = (
-            base["article_title"].astype(str).str.lower().str.contains(q_lower, na=False)
-            | base["content"].astype(str).str.lower().str.contains(q_lower, na=False)
-            | base["url"].astype(str).str.lower().str.contains(q_lower, na=False)
-        )
+        if "comment" not in base.columns:
+            base["comment"] = ""
+        mask = base["comment"].astype(str).str.contains(q, case=False, na=False)
         base = base[mask]
 
     # 3) 依政黨/子類別/極性過濾（以推文欄位為準）
@@ -652,6 +646,19 @@ def trend_line_and_filters(mode: str = "both"):
             wc_img = WordCloud(font_path="Font.ttc", background_color="white", width=900, height=420).generate(text)
             plt.imshow(wc_img, interpolation="bilinear"); plt.axis("off")
             st.pyplot(plt)
+            # 顯示詞頻表格
+            from collections import Counter
+            tokens = text.split()
+            freq = Counter(tokens)
+            freq_df = pd.DataFrame(freq.items(), columns=["token", "frequency"]).sort_values("frequency", ascending=False)
+            st.dataframe(freq_df, use_container_width=True, hide_index=True)
+            # 下載詞頻 CSV
+            # st.download_button(
+            #     "下載詞頻 CSV",
+            #     freq_df.to_csv(index=False).encode("utf-8-sig"),
+            #     file_name="wordcloud_token_frequency.csv",
+            #     mime="text/csv",
+            # )
         else:
             st.info("無資料可生成文字雲")
 
