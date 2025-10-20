@@ -298,24 +298,49 @@ def article_thread_view(
         if col in df.columns:
             if not pd.api.types.is_datetime64_any_dtype(df[col]):
                 df[col] = df[col].apply(_to_dt)
-    with st.sidebar:
-        st.markdown("### 文章彙整篩選")
+    with st.container():
         # 與前面一致：以月份選擇起訖
         min_month = df["date"].dropna().min().to_period("M").to_timestamp()
         max_month = df["date"].dropna().max().to_period("M").to_timestamp()
         month_range = pd.date_range(start=min_month, end=max_month, freq="MS")
         month_labels = [d.strftime("%Y-%m") for d in month_range]
-        start_label = st.selectbox("起始月份（文章彙整）", month_labels, index=0, key="thread_start_month")
-        end_label = st.selectbox("結束月份（文章彙整）", month_labels, index=len(month_labels)-1, key="thread_end_month")
-        start_utc = pd.to_datetime(start_label + "-01").tz_localize("UTC")
-        end_utc = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
-        q = st.text_input("搜尋（標題／內文／網址）", placeholder="輸入關鍵字...").strip()
         parties = sorted(df["target"].dropna().unique().tolist()) if "target" in df.columns else []
         subcats = sorted(df["subcategory"].dropna().unique().tolist()) if "subcategory" in df.columns else []
         pols = sorted(df["polarity"].dropna().unique().tolist()) if "polarity" in df.columns else []
-        sel_parties = st.multiselect("政黨（推文）", parties, default=[])
-        sel_subcats = st.multiselect("子類別（推文）", subcats, default=[])
-        sel_pols = st.multiselect("極性（推文）", pols, default=[])
+
+        # Three-column layout for filters
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            start_label = st.selectbox("起始月份（文章彙整）", month_labels, index=0, key="thread_start_month")
+            end_label = st.selectbox("結束月份（文章彙整）", month_labels, index=len(month_labels)-1, key="thread_end_month")
+        with col2:
+            st.markdown("**政黨**（不勾選 = 全部）")
+            party_checks = []
+            for p in parties:
+                party_checks.append((p, st.checkbox(p, key=f"thread_party_{p}", value=False)))
+            sel_parties = [p for p, on in party_checks if on]
+        with col3:
+            st.markdown("**極性**（不勾選 = 全部）")
+            pol_pos = st.checkbox("positive", key="thread_pol_pos", value=False)
+            pol_neg = st.checkbox("negative", key="thread_pol_neg", value=False)
+            sel_pols = [p for p, on in [("positive", pol_pos), ("negative", pol_neg)] if on]
+
+        start_utc = pd.to_datetime(start_label + "-01").tz_localize("UTC")
+        end_utc = (pd.to_datetime(end_label + "-01") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)).tz_localize("UTC")
+        q = st.text_input("搜尋（標題／內文／網址）", placeholder="輸入關鍵字...").strip()
+
+        # 子類別（用勾選；不勾選 = 全部）
+        st.markdown("**子類別（Judgement）**（不勾選 = 全部）")
+        st.markdown('<div class="pill-row">', unsafe_allow_html=True)
+        n_sc_cols = 6 if len(subcats) >= 12 else 4 if len(subcats) > 6 else 3
+        sc_cols = st.columns(n_sc_cols) if subcats else [st]
+        sc_checks = []
+        for i, s in enumerate(subcats):
+            with sc_cols[i % len(sc_cols)]:
+                sc_checks.append((s, st.checkbox(s, key=f"thread_subcat_{s}", value=False)))
+        st.markdown('</div>', unsafe_allow_html=True)
+        sel_subcats = [s for s, on in sc_checks if on]
+
         sort_by = st.selectbox("文章排序依據", ["最新在前", "最舊在前", "最多推文在前", "最少推文在前"], index=0)
     # ===== 以「符合篩選條件的推文（每筆）」為主體 =====
     # 1) 先用月份區間過濾（以文章時間為主；若沒有則用推文時間或 date）
@@ -361,15 +386,20 @@ def article_thread_view(
         st.info("沒有符合條件的推文。")
         return
     n_pages = (total_comments + page_size - 1) // page_size
-    page = st.number_input("頁碼", min_value=1, max_value=max(1, n_pages), value=1, step=1)
-    start_idx = (page - 1) * page_size
-    end_idx = min(start_idx + page_size, total_comments)
-    page_df = base.iloc[start_idx:end_idx]
-
-    st.caption(f"顯示第 {start_idx+1}–{end_idx} 筆，共 {total_comments} 筆")
+    page = 1
+    start_idx = 0
+    end_idx = 0
+    page_df = pd.DataFrame()
+    # 頁碼控制和顯示移到渲染卡片之後
 
     # 6) 逐筆渲染：標題= comment · polarity · subcategory；展開後顯示文章資訊與 other_comment 表
     import ast
+    # 先計算分頁資訊
+    page = st.session_state.get("thread_page", 1) if "thread_page" in st.session_state else 1
+    page = min(max(1, int(page)), max(1, n_pages))
+    start_idx = (page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_comments)
+    page_df = base.iloc[start_idx:end_idx]
     for _, r in page_df.iterrows():
         comment_txt = str(r.get("comment", "")).strip()
         pol = str(r.get("polarity", "")).strip()
@@ -408,7 +438,18 @@ def article_thread_view(
             else:
                 st.info("此筆資料沒有其他推文。")
 
-    # 7) 匯出目前頁面的推文（僅當頁）
+    # 8) 頁碼控制（放在最下方）
+    st.caption(f"顯示第 {start_idx+1}–{end_idx} 筆，共 {total_comments} 筆")
+    st.number_input(
+        "頁碼",
+        min_value=1,
+        max_value=max(1, n_pages),
+        value=page,
+        step=1,
+        key="thread_page",
+    )
+
+    # 9) 匯出目前頁面的推文（僅當頁）
     if st.button("下載目前頁面的推文 CSV"):
         st.download_button(
             "下載 CSV",
@@ -614,9 +655,6 @@ def trend_line_and_filters(mode: str = "both"):
         else:
             st.info("無資料可生成文字雲")
 
-def raw_table():
-    st.subheader("📋 原始評論資料")
-    st.dataframe(df[["date", "target", "subcategory", "polarity", "text_span", "comment"]], use_container_width=True)
 
 def intro_tab_content():
     st.markdown("### Appraisal framework")
@@ -649,9 +687,8 @@ if section == "full":
         kpi_all_time()
         overall_subcats()
 
-        # 篩選 + 趨勢 + 文字雲 + 原始表
+        # 篩選 + 趨勢 + 文字雲
         trend_line_and_filters()
-        raw_table()
         st.subheader("🧵 文章與推文彙整（依文章聚合）")
         article_thread_view(df, page_size=8)
 
@@ -681,11 +718,9 @@ else:
     elif section in {"wordcloud"}:
         trend_line_and_filters(mode="wordcloud")
 
-    elif section in {"raw_table", "table"}:
-        raw_table()
 
     elif section in {"intro"}:
         intro_tab_content()
 
     else:
-        st.info("未知的 section，請使用：overview / overall_subcats / trend_line / wordcloud / raw_table / intro / full")
+        st.info("未知的 section，請使用：overview / overall_subcats / trend_line / wordcloud / intro / full")
