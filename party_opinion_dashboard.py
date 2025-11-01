@@ -546,17 +546,23 @@ def trend_line_and_filters(mode: str = "both"):
         filtered = filtered[filtered["polarity"].isin(selected_polarity)]
 
     if mode in {"both", "line"}:
+        # 保持每日資料粒度，但 x 軸只顯示月份
         filtered["day"] = (filtered["date"] - pd.Timedelta(hours=8)).dt.floor("D")
         line_df = filtered.groupby(["day", "target", "subcategory", "polarity"]).size().reset_index(name="count")
         line_df["line_group"] = line_df["target"] + " - " + line_df["subcategory"] + " - " + line_df["polarity"]
         line = alt.Chart(line_df).mark_line(point=True).encode(
-            x=alt.X("day:T", title="日期", axis=alt.Axis(format="%m/%d", labelAngle=0), scale=alt.Scale(domain=[start_date, end_date])),
-            y=alt.Y("count:Q", title="評論數", scale=alt.Scale(domain=[0, 35])),
+            x=alt.X(
+                "day:T",
+                title="月份",
+                axis=alt.Axis(format="%m", labelAngle=0),
+                scale=alt.Scale(domain=[start_date, end_date])
+            ),
+            y=alt.Y("count:Q", title="評論數"),
             color=alt.Color(
                 "line_group:N",
                 legend=alt.Legend(
                     title="政黨 + 子類別 + polarity",
-                    labelLimit=1000,  # 不截斷標籤
+                    labelLimit=1000,
                     columns=1,
                     orient="right"
                 )
@@ -650,7 +656,7 @@ def trend_line_and_filters(mode: str = "both"):
             from collections import Counter
             tokens = text.split()
             freq = Counter(tokens)
-            freq_df = pd.DataFrame(freq.items(), columns=["token", "frequency"]).sort_values("frequency", ascending=False)
+            freq_df = pd.DataFrame(freq.items(), columns=["evaluative expression", "frequency"]).sort_values("frequency", ascending=False)
             st.dataframe(freq_df, use_container_width=True, hide_index=True)
             # 下載詞頻 CSV
             # st.download_button(
